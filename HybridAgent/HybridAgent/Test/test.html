@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<body>
+<button onclick="start()">Start</button>
+<pre id="output"></pre>
+
+<script>
+    async function start() {
+        const response = await fetch("http://localhost:5000/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream"
+            },
+            body: JSON.stringify({
+                messages: [
+                    { role: "user", content: "Hello AI" }
+                ]
+            })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            document.getElementById("output").textContent += decoder.decode(value);
+        }
+    }
+</script>
+</body>
+</html>
