@@ -26,7 +26,41 @@ A production-ready AI agent built with:
 
 # 🏗 Architecture Overview
 
-### Request Flow
+## 🏗 High-Level Architecture
+
+```mermaid
+flowchart LR
+    subgraph Client Layer
+        A[Web Client / HTTP Client]
+    end
+
+    subgraph API Layer
+        B[ASP.NET Core API]
+        C[ChatController]
+    end
+
+    subgraph Agent Layer
+        D[AgentService]
+        E[ToolRegistry]
+        F[Tool Implementations]
+    end
+
+    subgraph LLM Layer
+        G[Ollama Service]
+        H[Local LLM Model]
+    end
+
+    A --> B
+    B --> C
+    C --> D
+    D --> G
+    G --> H
+
+    D --> E
+    E --> F
+```
+
+## 🔄 Agent Tool-Calling Execution Flow
 ```mermaid
 sequenceDiagram
     participant Client
