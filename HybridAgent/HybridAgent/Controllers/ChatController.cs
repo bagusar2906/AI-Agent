@@ -8,12 +8,13 @@ namespace HybridAgent.Controllers;
 [Route("v1/chat")]
 public class ChatController : ControllerBase
 {
-    private readonly OllamaService _ollama;
     private readonly ChatService _chatService;
 
-    public ChatController(OllamaService ollama, ChatService chatService)
+    private readonly AgentService _agent;
+
+    public ChatController(AgentService agent, ChatService chatService)
     {
-        _ollama = ollama;
+        _agent = agent;
         _chatService = chatService;
     }
 
@@ -22,21 +23,19 @@ public class ChatController : ControllerBase
     {
         var sessionId = "default";
 
-        // ✅ Set headers FIRST
-        Response.Headers["Content-Type"] = "text/event-stream";
-        Response.Headers["Cache-Control"] = "no-cache";
-        Response.Headers["Connection"] = "keep-alive";
+            Response.Headers["Content-Type"] = "text/event-stream";
+            Response.Headers["Cache-Control"] = "no-cache";
+            Response.Headers["Connection"] = "keep-alive";
 
+            var userMessage = request.Messages.Last().Content;
 
-        var userMessage = request.Messages.Last().Content;
+            await foreach (var chunk in _agent.RunAsync(userMessage))
+            {
+                await Response.WriteAsync($"data: {chunk}\n\n");
+                await Response.Body.FlushAsync();
+            }
 
-        await foreach (var chunk in _ollama.StreamAsync(userMessage))
-        {
-            await Response.WriteAsync($"data: {chunk}\n\n");
-            await Response.Body.FlushAsync();
-        }
-
-        await Response.WriteAsync("data: [DONE]\n\n");
+            await Response.WriteAsync("data: [DONE]\n\n");
 
         await _chatService.SaveMessageAsync(sessionId, "user", userMessage);
     }

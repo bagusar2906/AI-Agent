@@ -33,3 +33,8 @@ public class VectorService
             .ToListAsync();
     }
 }
+
+public class SearchArgs
+{
+    public string Query { get; set; } = string.Empty;
+}

@@ -20,7 +20,7 @@ public class OllamaService
     {
         var response = await _http.PostAsJsonAsync("/api/generate", new
         {
-            model = "mistral",
+            model = _model,
             prompt = prompt,
             stream = false
         });
@@ -29,7 +29,7 @@ public class OllamaService
         return json.GetProperty("response").GetString();
     }
 
-    public async IAsyncEnumerable<string> StreamAsync(string prompt)
+    public async IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken cancellationToken)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/generate");
         request.Content = new StringContent(JsonSerializer.Serialize(new
@@ -39,13 +39,13 @@ public class OllamaService
             stream = true
         }), Encoding.UTF8, "application/json");
 
-        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-        var stream = await response.Content.ReadAsStreamAsync();
+        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         var reader = new StreamReader(stream);
 
         while (!reader.EndOfStream)
         {
-            var line = await reader.ReadLineAsync();
+            var line = await reader.ReadLineAsync(cancellationToken);
             if (!string.IsNullOrWhiteSpace(line))
                 yield return line;
         }
