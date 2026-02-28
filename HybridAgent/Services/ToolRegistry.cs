@@ -1,5 +1,7 @@
 using HybridAgent.Tools;
 
+namespace HybridAgent.Services;
+
 public class ToolRegistry
 {
     private readonly IEnumerable<IAgentTool> _tools;

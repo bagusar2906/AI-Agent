@@ -23,20 +23,36 @@ public class AgentService
 
         var jsonExample = JsonSerializer.Serialize(new
         {
-            tool = "tool_name",
-            arguments = new { }
+            tool = "dispense",
+            arguments = new
+            {
+                volume = 15,
+                platName = "Plate A1",
+                sourceLocation = "A1",
+                startColumn = 1,
+                endColumn = 12
+            }
         }, new JsonSerializerOptions { WriteIndented = true });
 
         var systemPrompt = $"""
-You are an AI assistant.
+You are controlling a laboratory liquid handler.
 
-You have access to the following tools:
+When a user asks to dispense liquid:
 
-{toolsJson}
+- Respond with ONLY valid JSON.
+- Do NOT include explanation.
+- Do NOT wrap in markdown.
+- Do NOT include text before or after JSON.
+- Property names must match exactly.
+- Output must be parseable by System.Text.Json.
 
-If a tool is needed, respond ONLY in valid JSON format like this:
+Example tool call:
 
 {jsonExample}
+
+Available tools:
+
+{toolsJson}
 
 Otherwise respond normally.
 """;
