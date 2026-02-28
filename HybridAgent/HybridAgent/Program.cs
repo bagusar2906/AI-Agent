@@ -38,6 +38,8 @@ builder.Services.AddControllers();
 
 var app = builder.Build();
 app.UseCors("AllowAll");
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapControllers();
 app.UseSwagger();
 app.UseSwaggerUI();

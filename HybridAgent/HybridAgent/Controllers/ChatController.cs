@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace HybridAgent.Controllers;
 
 [ApiController]
-[Route("v1/chat")]
+[Route("chat")]
 public class ChatController : ControllerBase
 {
     private readonly ChatService _chatService;
@@ -16,6 +16,18 @@ public class ChatController : ControllerBase
     {
         _agent = agent;
         _chatService = chatService;
+    }
+
+    [HttpGet("stream")]
+    public async Task Stream(string message)
+    {
+        Response.ContentType = "text/plain";
+
+        await foreach (var chunk in _agent.RunAsync(message))
+        {
+            await Response.WriteAsync(chunk);
+            await Response.Body.FlushAsync();
+        }
     }
 
     [HttpPost("completions")]

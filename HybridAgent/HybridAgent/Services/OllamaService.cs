@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 
 namespace HybridAgent.Services;
@@ -29,25 +30,45 @@ public class OllamaService
         return json.GetProperty("response").GetString();
     }
 
-    public async IAsyncEnumerable<string> StreamAsync(string prompt, CancellationToken cancellationToken)
+    public async IAsyncEnumerable<string> StreamAsync(
+        string prompt,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var request = new HttpRequestMessage(HttpMethod.Post, "/api/generate");
-        request.Content = new StringContent(JsonSerializer.Serialize(new
+        var http = new HttpClient();
+
+        var requestBody = new
         {
             model = _model,
             prompt = prompt,
             stream = true
-        }), Encoding.UTF8, "application/json");
+        };
 
-        var response = await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        var reader = new StreamReader(stream);
+        var response = await http.PostAsJsonAsync(
+            "http://localhost:11434/api/generate",
+            requestBody,
+            ct);
+
+        using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
 
         while (!reader.EndOfStream)
         {
-            var line = await reader.ReadLineAsync(cancellationToken);
-            if (!string.IsNullOrWhiteSpace(line))
-                yield return line;
+            var line = await reader.ReadLineAsync(ct);
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            using var doc = JsonDocument.Parse(line);
+
+            if (doc.RootElement.TryGetProperty("response", out var token))
+            {
+                yield return token.GetString()!;
+            }
+
+            if (doc.RootElement.TryGetProperty("done", out var doneProp) &&
+                doneProp.GetBoolean())
+            {
+                yield break;
+            }
         }
     }
 }
