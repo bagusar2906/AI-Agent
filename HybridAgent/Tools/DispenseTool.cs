@@ -1,12 +1,7 @@
-﻿
-
-using System.Text.Json;
+﻿using System.Text.Json;
 using HybridAgent.Helpers;
 
 namespace HybridAgent.Tools;
-
-
-using HybridAgent.Services;
 
 public class DispenseTool : IAgentTool
 {
@@ -27,7 +22,7 @@ public class DispenseTool : IAgentTool
                     volume = new
                     {
                         type = "number",
-                        description = "Volume to dispense in microliters"
+                        description = "Volume to dispense in µL"
                     },
                     plateName = new
                     {
