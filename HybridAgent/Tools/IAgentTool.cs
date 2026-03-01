@@ -6,4 +6,5 @@ public interface IAgentTool
     string Description { get; }
     object ParametersSchema { get; }  // JSON schema object
     Task<string> ExecuteAsync(string argumentsJson);
+
 }

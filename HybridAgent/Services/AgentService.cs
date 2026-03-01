@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using HybridAgent.Services;
+
+namespace HybridAgent.Services;
 
 public class AgentService
 {
@@ -27,13 +28,14 @@ public class AgentService
             arguments = new
             {
                 volume = 15,
-                platName = "Plate A1",
+                plateName = "Plate A1",
                 sourceLocation = "A1",
                 startColumn = 1,
                 endColumn = 12
             }
         }, new JsonSerializerOptions { WriteIndented = true });
 
+        // 🔹 1. Build system prompt
         var systemPrompt = $"""
 You are controlling a laboratory liquid handler.
 
@@ -57,15 +59,34 @@ Available tools:
 Otherwise respond normally.
 """;
 
+        // 🔹 2. First reasoning pass
         var firstResponse =
             await _ollama.GenerateAsync(systemPrompt + "\nUser: " + userMessage);
 
-        if (TryParseToolCall(firstResponse, out var toolName, out var argsJson))
-        {
-            var toolResult = await _registry.ExecuteAsync(toolName, argsJson);
+        // 🔹 3. Try to interpret as tool call
+        var toolCall = await EnsureValidToolCallAsync(firstResponse);
 
+        if (toolCall != null)
+        {
+            // 🔹 4. Validate required parameters dynamically
+            var missing = _registry.GetMissingFields(
+                toolCall.Value.Tool,
+                toolCall.Value.ArgumentsJson);
+
+            if (missing.Any())
+            {
+                yield return BuildClarificationQuestion(missing);
+                yield break;
+            }
+
+            // 🔹 5. Execute tool
+            var toolResult = await _registry.ExecuteAsync(
+                toolCall.Value.Tool,
+                toolCall.Value.ArgumentsJson);
+
+            // 🔹 6. Ask LLM to generate final natural-language response
             var finalPrompt = $"""
-User question:
+User request:
 {userMessage}
 
 Tool result:
@@ -79,6 +100,7 @@ Now provide the final answer.
         }
         else
         {
+            // 🔹 7. If no tool call, stream normal response
             await foreach (var chunk in _ollama.StreamAsync(userMessage, ct))
                 yield return chunk;
         }
@@ -95,14 +117,74 @@ Now provide the final answer.
         {
             var doc = JsonDocument.Parse(text);
 
-            tool = doc.RootElement.GetProperty("tool").GetString()!;
-            args = doc.RootElement.GetProperty("arguments").GetRawText();
+            if (!doc.RootElement.TryGetProperty("tool", out var toolProp))
+                return false;
+
+            if (!doc.RootElement.TryGetProperty("arguments", out var argsProp))
+                return false;
+
+            tool = toolProp.GetString()!;
+            args = argsProp.GetRawText();
 
             return true;
         }
-        catch (Exception e)
+        catch
         {
             return false;
         }
+    }
+
+    private string BuildClarificationQuestion(List<string> missing)
+    {
+        return "I need additional information before proceeding: "
+               + string.Join(", ", missing)
+               + ". Please provide the missing values.";
+    }
+    private async Task<(string Tool, string ArgumentsJson)?> EnsureValidToolCallAsync(string response)
+    {
+        const int maxRetries = 2;
+
+        string current = CleanJson(response);
+
+        for (int attempt = 0; attempt <= maxRetries; attempt++)
+        {
+            if (TryParseToolCall(current, out var tool, out var args))
+            {
+                return (tool, args);
+            }
+
+            if (attempt == maxRetries)
+                return null;
+
+            // 🔥 Self-healing correction prompt
+            var fixPrompt = $"""
+The previous response was intended to be a JSON tool call
+but it was not valid or parseable.
+
+Return ONLY valid JSON.
+Do NOT include explanation.
+Do NOT include markdown.
+Do NOT include text before or after JSON.
+
+Fix this:
+
+{current}
+""";
+
+            current = CleanJson(await _ollama.GenerateAsync(fixPrompt));
+        }
+
+        return null;
+    }
+
+    private string CleanJson(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        return text
+            .Replace("```json", "")
+            .Replace("```", "")
+            .Trim();
     }
 }
