@@ -51,6 +51,27 @@ function App() {
     setIsTyping(false);
   };
 
+  const renderMessageContent = (content) => {
+  try {
+    const parsed = JSON.parse(content);
+
+    // 🔹 Only render as code snippet if it's a tool result
+    if (parsed?.success === true && parsed?.data) {
+      return (
+        <pre className="json-block">
+          <code>
+            {JSON.stringify(parsed.data, null, 2)}
+          </code>
+        </pre>
+      );
+    }
+  } catch {
+    // Not JSON → fall back to markdown
+  }
+
+  return <ReactMarkdown>{content}</ReactMarkdown>;
+};
+
   return (
     <div className={darkMode ? "app dark" : "app light"}>
       <div className="header">
@@ -62,8 +83,8 @@ function App() {
 
       <div className="chat">
         {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          <div key={i} className={`message ${msg.role}`}>            
+            {renderMessageContent(msg.content)}
           </div>
         ))}
 
