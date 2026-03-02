@@ -76,7 +76,7 @@ function Chat() {
   return (
     <div className={darkMode ? "app dark" : "app light"}>
       <div className="header">
-        <h2>NT8 LLM Agent</h2>
+        <h2>NT8 Assistant</h2>
         <button onClick={() => setDarkMode(!darkMode)}>
           {darkMode ? "Light Mode" : "Dark Mode"}
         </button>
