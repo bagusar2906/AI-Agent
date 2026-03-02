@@ -12,11 +12,13 @@ builder.Services.AddHttpClient<OllamaService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<RagService>();
 builder.Services.AddScoped<ToolRegistry>();
-builder.Services.AddScoped<AgentService>();
-builder.Services.AddScoped<IAgentTool, DispenseTool>();
+builder.Services.AddScoped<ToolExecutor>();
+builder.Services.AddScoped<ChatAssistant>();
+builder.Services.AddScoped<ITool, DispenseTool>();
+builder.Services.AddScoped<IAgent, HybridRouter>();
 
 builder.Services.AddScoped<ToolRegistry>();
-builder.Services.AddScoped<AgentService>();
+
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<RagService>();
 builder.Services.ConfigureHttpJsonOptions(options =>

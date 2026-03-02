@@ -10,9 +10,9 @@ public class ChatController : ControllerBase
 {
     private readonly ChatService _chatService;
 
-    private readonly AgentService _agent;
+    private readonly IAgent _agent;
 
-    public ChatController(AgentService agent, ChatService chatService)
+    public ChatController(IAgent agent, ChatService chatService)
     {
         _agent = agent;
         _chatService = chatService;

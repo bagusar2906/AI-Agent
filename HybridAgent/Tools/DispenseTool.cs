@@ -1,6 +1,6 @@
 ﻿namespace HybridAgent.Tools;
 
-public class DispenseTool : AgentTool<DispenseArgs>
+public class DispenseTool : Tool<DispenseArgs>
 {
     public override string Name => "Dispense";
 
@@ -34,11 +34,30 @@ public class DispenseTool : AgentTool<DispenseArgs>
         }
     };
 
-    protected override Task<string> ExecuteAsync(DispenseArgs args)
+    protected override async Task<IToolResult> ExecuteAsync(DispenseArgs args)
     {
         // Real hardware logic here
-        return Task.FromResult(
-            $"Dispensed {args.Volume}uL from {args.SourceLocation} " +
-            $"to {args.PlateName} columns {args.StartColumn}-{args.EndColumn}");
+        if (args.Volume <= 0)
+            return ToolResult.Fail(
+                "dispense",
+                "Volume must be greater than zero.",
+                "INVALID_VOLUME");
+
+        // Execute hardware logic here
+       // await _robot.DispenseAsync(args);
+
+        return  ToolResult.Ok(
+            "dispense",
+            "Dispense operation completed successfully.",
+            new
+            {
+                args.PlateName,
+                args.Volume,
+                args.SourceLocation,
+                args.StartColumn,
+                args.EndColumn,
+                Status = "Completed",
+                Timestamp = DateTime.UtcNow
+            });
     }
 }

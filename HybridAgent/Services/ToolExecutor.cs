@@ -1,17 +1,26 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using HybridAgent.Helpers;
 
 namespace HybridAgent.Services;
 
-public class AgentService
+public interface IAgent
+{
+    IAsyncEnumerable<string> RunAsync(
+        string userMessage,
+        CancellationToken ct = default);
+}
+public class ToolExecutor : IAgent
 {
     private readonly OllamaService _ollama;
     private readonly ToolRegistry _registry;
+    private readonly JsonSerializerOptions _jsonOptions;
 
-    public AgentService(OllamaService ollama, ToolRegistry registry)
+    public ToolExecutor(OllamaService ollama, ToolRegistry registry)
     {
         _ollama = ollama;
         _registry = registry;
+        _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
     }
 
     public async IAsyncEnumerable<string> RunAsync(
@@ -20,7 +29,7 @@ public class AgentService
     {
         var toolsJson = JsonSerializer.Serialize(
             _registry.GetToolSchemas(),
-            new JsonSerializerOptions { WriteIndented = true });
+            _jsonOptions);
 
         var jsonExample = JsonSerializer.Serialize(new
         {
@@ -33,7 +42,7 @@ public class AgentService
                 startColumn = 1,
                 endColumn = 12
             }
-        }, new JsonSerializerOptions { WriteIndented = true });
+        }, _jsonOptions);
 
         // 🔹 1. Build system prompt
         var systemPrompt = $"""
@@ -80,23 +89,13 @@ Otherwise respond normally.
             }
 
             // 🔹 5. Execute tool
-            var toolResult = await _registry.ExecuteAsync(
+            var toolResult = await _registry.ExecuteToolAsync(
                 toolCall.Value.Tool,
                 toolCall.Value.ArgumentsJson);
 
-            // 🔹 6. Ask LLM to generate final natural-language response
-            var finalPrompt = $"""
-User request:
-{userMessage}
-
-Tool result:
-{toolResult}
-
-Now provide the final answer.
-""";
-
-            await foreach (var chunk in _ollama.StreamAsync(finalPrompt, ct))
-                yield return chunk;
+            // 🔹 IMPORTANT: Serialize result to JSON
+            var toolResultJson = JsonSerializer.Serialize(toolResult.Result, JsonHelper.Default);
+            yield return toolResultJson;
         }
         else
         {

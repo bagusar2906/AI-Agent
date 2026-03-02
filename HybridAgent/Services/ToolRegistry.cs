@@ -8,7 +8,7 @@ public class ToolRegistry
 {
     private readonly Dictionary<string, ToolMetadata> _tools;
 
-    public ToolRegistry(IEnumerable<IAgentTool> tools)
+    public ToolRegistry(IEnumerable<ITool> tools)
     {
         _tools = tools.ToDictionary(
             t => t.Name,
@@ -20,7 +20,7 @@ public class ToolRegistry
             StringComparer.OrdinalIgnoreCase);
     }
 
-    private static List<string> ExtractRequiredFields(IAgentTool tool)
+    private static List<string> ExtractRequiredFields(ITool tool)
     {
         var schemaNode = JsonNode.Parse(
             JsonSerializer.Serialize(tool.GetSchema()));
@@ -57,7 +57,7 @@ public class ToolRegistry
         return missing;
     }
 
-    public async Task<string> ExecuteAsync(string toolName, string argumentsJson)
+    public async Task<Task<IToolResult>> ExecuteToolAsync(string toolName, string argumentsJson)
     {
         if (!_tools.TryGetValue(toolName, out var meta))
             throw new InvalidOperationException("Tool not registered.");
@@ -73,6 +73,6 @@ public class ToolRegistry
         if (typedArgs == null)
             throw new InvalidOperationException("Invalid arguments.");
 
-        return await meta.Tool.ExecuteUntypedAsync(typedArgs);
+        return  meta.Tool.ExecuteFromJsonAsync(typedArgs);
     }
 }

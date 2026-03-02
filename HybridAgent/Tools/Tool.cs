@@ -1,6 +1,6 @@
 ﻿namespace HybridAgent.Tools;
 
-public abstract class AgentTool<TArgs> : IAgentTool
+public abstract class Tool<TArgs> : ITool
     where TArgs : class
 {
     public abstract string Name { get; }
@@ -9,7 +9,7 @@ public abstract class AgentTool<TArgs> : IAgentTool
 
     public Type ArgumentsType => typeof(TArgs);
 
-    public async Task<string> ExecuteUntypedAsync(object args)
+    public async Task<IToolResult> ExecuteFromJsonAsync(object args)
     {
         if (args is not TArgs typedArgs)
             throw new InvalidOperationException("Invalid argument type.");
@@ -17,5 +17,5 @@ public abstract class AgentTool<TArgs> : IAgentTool
         return await ExecuteAsync(typedArgs);
     }
 
-    protected abstract Task<string> ExecuteAsync(TArgs args);
+    protected abstract Task<IToolResult> ExecuteAsync(TArgs args);
 }

@@ -1,6 +1,6 @@
 ﻿namespace HybridAgent.Tools;
 
-public interface IAgentTool
+public interface ITool
 {
     string Name { get; }
 
@@ -8,5 +8,5 @@ public interface IAgentTool
 
     Type ArgumentsType { get; }
 
-    Task<string> ExecuteUntypedAsync(object args);
+    Task<IToolResult> ExecuteFromJsonAsync(object args);
 }
