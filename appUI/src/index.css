@@ -12,16 +12,3 @@ code {
     monospace;
 }
 
-.json-block {
-  background-color: #1e1e1e;
-  color: #d4d4d4;
-  padding: 12px;
-  border-radius: 8px;
-  overflow-x: auto;
-  font-size: 14px;
-}
-
-.app.light .json-block {
-  background-color: #f4f4f4;
-  color: #333;
-}

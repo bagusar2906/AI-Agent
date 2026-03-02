@@ -36,7 +36,7 @@
 }
 
 .message.user {
-  background: #2563eb;
+  background: #3a3b3d;
   align-self: flex-end;
 }
 
@@ -89,6 +89,8 @@ button {
   border-radius: 50%;
   animation: bounce 1.4s infinite;
 }
+
+
 
 .typing span:nth-child(2) {
   animation-delay: 0.2s;

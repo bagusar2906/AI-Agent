@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import "./App.css";
+import "./Chat.css";
 
-function App() {
+function Chat() {
   const [messages, setMessages] = useState(() => {
     const saved = localStorage.getItem("chatHistory");
     return saved ? JSON.parse(saved) : [];
@@ -110,4 +110,4 @@ function App() {
   );
 }
 
-export default App;
+export default Chat;
