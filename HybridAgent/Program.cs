@@ -13,8 +13,6 @@ builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<RagService>();
 builder.Services.AddScoped<ToolRegistry>();
 builder.Services.AddScoped<AgentService>();
-builder.Services.AddScoped<IAgentTool, CalculatorTool>();
-builder.Services.AddScoped<IAgentTool, TimeTool>();
 builder.Services.AddScoped<IAgentTool, DispenseTool>();
 
 builder.Services.AddScoped<ToolRegistry>();

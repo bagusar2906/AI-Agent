@@ -1,88 +1,78 @@
-using System.Text.Json.Nodes;
-using HybridAgent.Tools;
-
 namespace HybridAgent.Services;
 
+using Tools;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 public class ToolRegistry
 {
-    private readonly Dictionary<string, IAgentTool> _tools;
+    private readonly Dictionary<string, ToolMetadata> _tools;
 
     public ToolRegistry(IEnumerable<IAgentTool> tools)
     {
         _tools = tools.ToDictionary(
             t => t.Name,
-            t => t,
+            t => new ToolMetadata
+            {
+                Tool = t,
+                RequiredFields = ExtractRequiredFields(t)
+            },
             StringComparer.OrdinalIgnoreCase);
     }
 
-    // 🔹 Expose tool schemas to LLM
+    private static List<string> ExtractRequiredFields(IAgentTool tool)
+    {
+        var schemaNode = JsonNode.Parse(
+            JsonSerializer.Serialize(tool.GetSchema()));
+
+        return schemaNode?["function"]?["parameters"]?["required"]
+            ?.AsArray()
+            .Select(x => x?.ToString())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList() ?? new List<string>();
+    }
+
     public IEnumerable<object> GetToolSchemas()
-    {
-        return _tools.Values.Select(t => new
-        {
-            name = t.Name,
-            description = t.Description,
-            parameters = t.ParametersSchema
-        });
-    }
+        => _tools.Values.Select(x => x.Tool.GetSchema());
 
-    // 🔹 Execute tool safely
-    public async Task<string> ExecuteAsync(string toolName, string argsJson)
-    {
-        if (!_tools.TryGetValue(toolName, out var tool))
-            throw new InvalidOperationException(
-                $"Tool '{toolName}' not registered.");
-
-        return await tool.ExecuteAsync(argsJson);
-    }
-
-    // 🔹 Dynamic schema validation
-    // Field is missing if:
-    //   - It does not exist
-    //   - OR it exists but value is null
     public List<string> GetMissingFields(string toolName, string argumentsJson)
     {
-        if (!_tools.TryGetValue(toolName, out var tool))
-            throw new InvalidOperationException($"Tool '{toolName}' not registered.");
+        if (!_tools.TryGetValue(toolName, out var meta))
+            throw new InvalidOperationException("Tool not registered.");
 
-        var schemaNode = JsonNode.Parse(
-            JsonSerializer.Serialize(tool.ParametersSchema));
-
-        var requiredFields = new List<string?>();
-
-        if (schemaNode is JsonObject schemaObj &&
-            schemaObj["required"] is JsonArray requiredArray)
-        {
-            requiredFields = requiredArray
-                .Select(r => r?.ToString())
-                .Where(r => !string.IsNullOrWhiteSpace(r))
-                .ToList();
-        }
-
-        var argsDoc = JsonDocument.Parse(argumentsJson);
-        var argsRoot = argsDoc.RootElement;
+        var doc = JsonDocument.Parse(argumentsJson);
+        var root = doc.RootElement;
 
         var missing = new List<string>();
 
-        foreach (var field in requiredFields)
+        foreach (var field in meta.RequiredFields)
         {
-            if (!argsRoot.TryGetProperty(field!, out var value))
+            if (!root.TryGetProperty(field, out var value) ||
+                value.ValueKind == JsonValueKind.Null)
             {
-                // Completely absent
-                missing.Add(field!);
-                continue;
-            }
-
-            if (value.ValueKind == JsonValueKind.Null)
-            {
-                // Present but explicitly null
-                missing.Add(field!);
+                missing.Add(field);
             }
         }
 
         return missing;
     }
 
+    public async Task<string> ExecuteAsync(string toolName, string argumentsJson)
+    {
+        if (!_tools.TryGetValue(toolName, out var meta))
+            throw new InvalidOperationException("Tool not registered.");
+
+        var typedArgs = JsonSerializer.Deserialize(
+            argumentsJson,
+            meta.Tool.ArgumentsType,
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+        if (typedArgs == null)
+            throw new InvalidOperationException("Invalid arguments.");
+
+        return await meta.Tool.ExecuteUntypedAsync(typedArgs);
+    }
 }
