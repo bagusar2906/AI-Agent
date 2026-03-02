@@ -1,5 +1,5 @@
 {
-  "name": "hybrid-agent-ui",
+  "name": "nt8-llm-agent",
   "version": "0.1.0",
   "private": true,
   "dependencies": {

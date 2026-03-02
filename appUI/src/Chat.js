@@ -4,7 +4,8 @@ import "./Chat.css";
 
 function Chat() {
   const [messages, setMessages] = useState(() => {
-    const saved = localStorage.getItem("chatHistory");
+    //const saved = localStorage.getItem("chatHistory");
+    const saved = null; // Disable localStorage for now
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -75,7 +76,7 @@ function Chat() {
   return (
     <div className={darkMode ? "app dark" : "app light"}>
       <div className="header">
-        <h2>Hybrid AI Agent</h2>
+        <h2>NT8 LLM Agent</h2>
         <button onClick={() => setDarkMode(!darkMode)}>
           {darkMode ? "Light Mode" : "Dark Mode"}
         </button>
