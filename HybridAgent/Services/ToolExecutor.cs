@@ -31,16 +31,40 @@ public class ToolExecutor : IAgent
             _registry.GetToolSchemas(),
             _jsonOptions);
 
-        var jsonExample = JsonSerializer.Serialize(new
+        var jsonExample1 = JsonSerializer.Serialize(new
         {
             tool = "dispense",
-            arguments = new
+            arguments = new[] { new
             {
                 volume = 15,
-                plateName = "Plate A1",
+                station = "Station 1",
                 sourceLocation = "A1",
                 startColumn = 1,
-                endColumn = 12
+                endColumn = 3
+            }}
+        }, _jsonOptions);
+
+        var jsonExample2 = JsonSerializer.Serialize(new
+        {
+            tool = "dispense",
+            arguments = new[]
+            {
+                new
+                {
+                    volume = 10,
+                    station = "Protein A1",
+                    sourceLocation = "A1",
+                    startColumn = 1,
+                    endColumn = 3
+                },
+                new
+                {
+                    volume = 5,
+                    station = "Station 1",
+                    sourceLocation = "Station 2",
+                    startColumn = 2,
+                    endColumn = 4
+                }
             }
         }, _jsonOptions);
 
@@ -50,20 +74,32 @@ You are controlling a laboratory liquid handler.
 
 When a user asks to dispense liquid:
 
-- Respond with ONLY valid JSON.
-- Do NOT include explanation.
-- Do NOT wrap in markdown.
-- Do NOT include text before or after JSON.
-- Property names must match exactly.
-- Output must be parseable by System.Text.Json.
+- You MUST call the "dispense" tool.
+- Do NOT respond with raw JSON.
+- Do NOT respond with explanation.
+- Return a function call.
 
-Example tool call:
-
-{jsonExample}
-
-Available tools:
+The dispense tool expects:
 
 {toolsJson}
+
+Rules:
+- "items" must always be an array.
+- Even for a single dispense, wrap it inside the "items" array.
+- Never return a single object.
+- Never return a raw array.
+
+Example 1:
+User: Dispense 15uL from A1 to Station 1 columns 1 to 3.
+Tool arguments:
+
+{jsonExample1}
+
+Example 2:
+User: Dispense 10uL from Protein A1 to Station 1 columns 1 to 3 and Fragment 5uL from Station 2 to Station 1 columns 2 to 4.
+Tool arguments:
+
+{jsonExample2}
 
 Otherwise respond normally.
 """;
