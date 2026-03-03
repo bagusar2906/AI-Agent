@@ -40,7 +40,6 @@ function Chat() {
       const decoder = new TextDecoder();
 
       let fullResponse = "";
-      let firstChunk = true;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -52,14 +51,15 @@ function Chat() {
         setMessages(prev => {
           const updated = [...prev];
           const lastIndex = updated.length - 1;
+          const last = updated[lastIndex];
 
-          if (firstChunk) {
+          // If the last message is the initial "thinking" bubble, replace it on first chunk
+          if (!last || last.type === "thinking") {
             updated[lastIndex] = {
               role: "assistant",
               type: "chat",
               content: decodedChunk
             };
-            firstChunk = false;
           } else {
             updated[lastIndex].content += decodedChunk;
           }
@@ -115,7 +115,7 @@ function Chat() {
       case "tool":
         return (
           <div className="tool-card">
-            <div className="tool-title">Tool Result</div>
+            {/* <div className="tool-title">Tool Result</div> */}
             <pre>
               <code>{JSON.stringify(msg.content, null, 2)}</code>
             </pre>
