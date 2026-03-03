@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HybridAgent", "HybridAgent\HybridAgent.csproj", "{520AF92B-EDE1-4821-A246-82DFD22B0E45}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NT8Assistant", "NT8Assistant\NT8Assistant.csproj", "{520AF92B-EDE1-4821-A246-82DFD22B0E45}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
