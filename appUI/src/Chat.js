@@ -22,56 +22,88 @@ function Chat() {
   const sendMessage = async () => {
     if (!input.trim()) return;
 
-    const userMessage = { role: "user", content: input };
+    const userInput = input;
+    const userMessage = { role: "user", content: userInput };
+
     setMessages(prev => [...prev, userMessage]);
     setInput("");
-    setIsTyping(true);
 
-    const response = await fetch(
-      `http://localhost:5000/chat/stream?message=${encodeURIComponent(input)}`
-    );
+    // Add assistant "thinking" bubble
+    setMessages(prev => [
+      ...prev,
+      { role: "assistant", content: "__THINKING__" }
+    ]);
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let assistantText = "";
+    try {
+      const response = await fetch(
+        `http://localhost:5000/chat/stream?message=${encodeURIComponent(userInput)}`
+      );
 
-    setMessages(prev => [...prev, { role: "assistant", content: "" }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      let firstChunk = true;
 
-      assistantText += decoder.decode(value);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const decodedChunk = decoder.decode(value);
+
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
+
+          if (firstChunk) {
+            // Replace Thinking...
+            updated[lastIndex].content = decodedChunk;
+            firstChunk = false;
+          } else {
+            updated[lastIndex].content += decodedChunk;
+          }
+
+          return updated;
+        });
+      }
+    } catch (error) {
       setMessages(prev => {
         const updated = [...prev];
-        updated[updated.length - 1].content = assistantText;
+        updated[updated.length - 1].content =
+          "⚠️ Error connecting to server.";
         return updated;
       });
     }
-
-    setIsTyping(false);
   };
 
   const renderMessageContent = (content) => {
-  try {
-    const parsed = JSON.parse(content);
-
-    // 🔹 Only render as code snippet if it's a tool result
-    if (parsed?.success === true && parsed?.data) {
+    // Thinking bubble
+    if (content === "__THINKING__") {
       return (
-        <pre className="json-block">
-          <code>
-            {JSON.stringify(parsed.data, null, 2)}
-          </code>
-        </pre>
+        <div className="thinking-bubble">
+          Thinking
+          <span className="dot">.</span>
+          <span className="dot">.</span>
+          <span className="dot">.</span>
+        </div>
       );
     }
-  } catch {
-    // Not JSON → fall back to markdown
-  }
 
-  return <ReactMarkdown>{content}</ReactMarkdown>;
-};
+    try {
+      const parsed = JSON.parse(content);
+
+      if (parsed?.success === true && parsed?.data) {
+        return (
+          <pre className="json-block">
+            <code>
+              {JSON.stringify(parsed.data, null, 2)}
+            </code>
+          </pre>
+        );
+      }
+    } catch {}
+
+    return <ReactMarkdown>{content}</ReactMarkdown>;
+  };
 
   return (
     <div className={darkMode ? "app dark" : "app light"}>
