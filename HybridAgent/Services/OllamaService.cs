@@ -17,7 +17,7 @@ public class OllamaService
         _http.BaseAddress = new Uri(baseUrl!);
     }
 
-    public async Task<string> GenerateAsync(string userPrompt)
+    public async Task<string?> GenerateAsync(string userPrompt)
     {
         var response = await _http.PostAsJsonAsync("/api/generate", new
         {

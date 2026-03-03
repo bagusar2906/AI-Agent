@@ -88,6 +88,8 @@ Rules:
 - Even for a single dispense, wrap it inside the "items" array.
 - Never return a single object.
 - Never return a raw array.
+- Do NOT reuse previous values.
+- Do NOT guess missing values.
 
 Example 1:
 User: Dispense 15uL from A1 to Station 1 columns 1 to 3.
@@ -141,7 +143,7 @@ Otherwise respond normally.
         }
     }
 
-    private bool TryParseToolCall(string text,
+    private bool TryParseToolCall(string? text,
         out string tool,
         out string args)
     {
@@ -169,17 +171,17 @@ Otherwise respond normally.
         }
     }
 
-    private string BuildClarificationQuestion(List<string> missing)
+    private string BuildClarificationQuestion(IEnumerable<string> missing)
     {
         return "I need additional information before proceeding: "
                + string.Join(", ", missing)
                + ". Please provide the missing values.";
     }
-    private async Task<(string Tool, string ArgumentsJson)?> EnsureValidToolCallAsync(string response)
+    private async Task<(string Tool, string ArgumentsJson)?> EnsureValidToolCallAsync(string? response)
     {
         const int maxRetries = 2;
 
-        string current = CleanJson(response);
+        string? current = CleanJson(response);
 
         for (int attempt = 0; attempt <= maxRetries; attempt++)
         {
@@ -212,7 +214,7 @@ Fix this:
         return null;
     }
 
-    private string CleanJson(string text)
+    private string? CleanJson(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return text;

@@ -4,7 +4,7 @@ public class DispenseTool : Tool<List<DispenseArgs>>
 {
     public override string Name => "Dispense";
 
-    /*public override object GetSchema() => new
+    public override object GetSchema() => new
     {
         type = "function",
         function = new
@@ -36,31 +36,6 @@ public class DispenseTool : Tool<List<DispenseArgs>>
                 }
             }
         }
-    };*/
-
-    public override object GetSchema() => new
-    {
-
-                items = new [] {
-                    new {
-                        type = "object",
-                        properties = new
-                        {
-                            volume = new { type = "number" },
-                            station = new { type = "string" },
-                            sourceLocation = new { type = "string" },
-                            startColumn = new { type = "integer" },
-                            endColumn = new { type = "integer" }
-                        }  },
-                },
-                required = new[]
-                {
-                    "volume",
-                    "station",
-                    "sourceLocation",
-                    "startColumn",
-                    "endColumn"
-                }
     };
 
     protected override async Task<IToolResult> ExecuteAsync(List<DispenseArgs> args)

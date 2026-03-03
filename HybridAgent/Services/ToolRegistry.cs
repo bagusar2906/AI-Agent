@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication;
+
 namespace HybridAgent.Services;
 
 using Tools;
@@ -75,9 +77,24 @@ public class ToolRegistry
         ICollection<string> missingFields,
         int? index)
     {
+
         foreach (var field in meta.RequiredFields.Where(field => !element.TryGetProperty(field, out _)))
         {
             missingFields.Add(index.HasValue ? $"Item[{index}] missing field: {field}" : $"Missing field: {field}");
+        }
+
+        // check for null
+        foreach (var field in meta.RequiredFields.Where(field => element.TryGetProperty(field, out _)))
+        {
+            element.TryGetProperty(field, out var value);
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.String when string.IsNullOrEmpty(value.GetString()):
+                case JsonValueKind.Number when value.GetDouble() == 0d:
+                case JsonValueKind.Null:
+                    missingFields.Add(index.HasValue ? $"Item[{index}] missing field: {field}" : $"Missing field: {field}");
+                    break;
+            }
         }
     }
 
