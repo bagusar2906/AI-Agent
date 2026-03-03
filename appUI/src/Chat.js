@@ -3,19 +3,12 @@ import ReactMarkdown from "react-markdown";
 import "./Chat.css";
 
 function Chat() {
-  const [messages, setMessages] = useState(() => {
-    //const saved = localStorage.getItem("chatHistory");
-    const saved = null; // Disable localStorage for now
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
-    localStorage.setItem("chatHistory", JSON.stringify(messages));
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -23,15 +16,19 @@ function Chat() {
     if (!input.trim()) return;
 
     const userInput = input;
-    const userMessage = { role: "user", content: userInput };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput("");
-
-    // Add assistant "thinking" bubble
+    // Add user message
     setMessages(prev => [
       ...prev,
-      { role: "assistant", content: "__THINKING__" }
+      { role: "user", type: "chat", content: userInput }
+    ]);
+
+    setInput("");
+
+    // Add thinking bubble
+    setMessages(prev => [
+      ...prev,
+      { role: "assistant", type: "thinking", content: "" }
     ]);
 
     try {
@@ -42,6 +39,7 @@ function Chat() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      let fullResponse = "";
       let firstChunk = true;
 
       while (true) {
@@ -49,14 +47,18 @@ function Chat() {
         if (done) break;
 
         const decodedChunk = decoder.decode(value);
+        fullResponse += decodedChunk;
 
         setMessages(prev => {
           const updated = [...prev];
           const lastIndex = updated.length - 1;
 
           if (firstChunk) {
-            // Replace Thinking...
-            updated[lastIndex].content = decodedChunk;
+            updated[lastIndex] = {
+              role: "assistant",
+              type: "chat",
+              content: decodedChunk
+            };
             firstChunk = false;
           } else {
             updated[lastIndex].content += decodedChunk;
@@ -65,44 +67,67 @@ function Chat() {
           return updated;
         });
       }
-    } catch (error) {
+
+      // After streaming finished → detect tool JSON
+      try {
+        const parsed = JSON.parse(fullResponse);
+
+        if (parsed?.success === true && parsed?.data) {
+          setMessages(prev => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: "assistant",
+              type: "tool",
+              content: parsed.data
+            };
+            return updated;
+          });
+        }
+      } catch {
+        // Not JSON → keep chat message
+      }
+
+    } catch (err) {
       setMessages(prev => {
         const updated = [...prev];
-        updated[updated.length - 1].content =
-          "⚠️ Error connecting to server.";
+        updated[updated.length - 1] = {
+          role: "assistant",
+          type: "error",
+          content: "⚠️ Failed to connect to server."
+        };
         return updated;
       });
     }
   };
 
-  const renderMessageContent = (content) => {
-    // Thinking bubble
-    if (content === "__THINKING__") {
-      return (
-        <div className="thinking-bubble">
-          Thinking
-          <span className="dot">.</span>
-          <span className="dot">.</span>
-          <span className="dot">.</span>
-        </div>
-      );
-    }
-
-    try {
-      const parsed = JSON.parse(content);
-
-      if (parsed?.success === true && parsed?.data) {
+  const renderMessage = (msg) => {
+    switch (msg.type) {
+      case "thinking":
         return (
-          <pre className="json-block">
-            <code>
-              {JSON.stringify(parsed.data, null, 2)}
-            </code>
-          </pre>
+          <div className="thinking">
+            Thinking
+            <span className="dot">.</span>
+            <span className="dot">.</span>
+            <span className="dot">.</span>
+          </div>
         );
-      }
-    } catch {}
 
-    return <ReactMarkdown>{content}</ReactMarkdown>;
+      case "tool":
+        return (
+          <div className="tool-card">
+            <div className="tool-title">Tool Result</div>
+            <pre>
+              <code>{JSON.stringify(msg.content, null, 2)}</code>
+            </pre>
+          </div>
+        );
+
+      case "error":
+        return <div className="error">{msg.content}</div>;
+
+      default:
+        return <ReactMarkdown>{msg.content}</ReactMarkdown>;
+    }
   };
 
   return (
@@ -116,17 +141,10 @@ function Chat() {
 
       <div className="chat">
         {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>            
-            {renderMessageContent(msg.content)}
+          <div key={i} className={`message ${msg.role}`}>
+            {renderMessage(msg)}
           </div>
         ))}
-
-        {isTyping && (
-          <div className="typing">
-            <span></span><span></span><span></span>
-          </div>
-        )}
-
         <div ref={chatEndRef} />
       </div>
 
