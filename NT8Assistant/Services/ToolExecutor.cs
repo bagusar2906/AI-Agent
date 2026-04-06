@@ -10,25 +10,16 @@ public interface IAgent
         string userMessage,
         CancellationToken ct = default);
 }
-public class ToolExecutor : IAgent
+public class ToolExecutor(OllamaService ollama, ToolRegistry registry) : IAgent
 {
-    private readonly OllamaService _ollama;
-    private readonly ToolRegistry _registry;
-    private readonly JsonSerializerOptions _jsonOptions;
-
-    public ToolExecutor(OllamaService ollama, ToolRegistry registry)
-    {
-        _ollama = ollama;
-        _registry = registry;
-        _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-    }
+    private readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true };
 
     public async IAsyncEnumerable<string> RunAsync(
         string userMessage,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var toolsJson = JsonSerializer.Serialize(
-            _registry.GetToolSchemas(),
+            registry.GetToolSchemas(),
             _jsonOptions);
 
         var jsonExample1 = JsonSerializer.Serialize(new
@@ -104,30 +95,41 @@ Tool arguments:
 {jsonExample2}
 
 Otherwise respond normally.
+
 """;
 
-        // 🔹 2. First reasoning pass
+        // Simulate missing fields
+        if (userMessage.ToLower().Contains("simulate"))
+        {
+            var message =
+                AgentMessageBuilder.BuildValidationMessage(new List<string> { "Volume", "Source Location" },
+                    userMessage);
+            yield return JsonSerializer.Serialize(message, JsonHelper.Default);
+            yield break;
+        }
+        // 🔹 2. First reasoning passes
         var firstResponse =
-            await _ollama.GenerateAsync(systemPrompt + "\nUser: " + userMessage);
+            await ollama.GenerateAsync(systemPrompt + "\nUser: " + userMessage);
 
-        // 🔹 3. Try to interpret as tool call
+        // 🔹 3. Try to interpret as a tool call
         var toolCall = await EnsureValidToolCallAsync(firstResponse);
 
         if (toolCall != null)
         {
             // 🔹 4. Validate required parameters dynamically
-            var missing = _registry.GetMissingFields(
+            var missing = registry.GetMissingFields(
                 toolCall.Value.Tool,
                 toolCall.Value.ArgumentsJson);
-
+            
             if (missing.Any())
             {
-                yield return BuildClarificationQuestion(missing);
+                var message = AgentMessageBuilder.BuildValidationMessage(missing, userMessage);
+                yield return JsonSerializer.Serialize(message, JsonHelper.Default);
                 yield break;
             }
 
             // 🔹 5. Execute tool
-            var toolResult = await _registry.ExecuteToolAsync(
+            var toolResult = await registry.ExecuteToolAsync(
                 toolCall.Value.Tool,
                 toolCall.Value.ArgumentsJson);
 
@@ -137,8 +139,8 @@ Otherwise respond normally.
         }
         else
         {
-            // 🔹 7. If no tool call, stream normal response
-            await foreach (var chunk in _ollama.StreamAsync(userMessage, ct))
+            // 🔹 7. If no tool calls, stream a normal response
+            await foreach (var chunk in ollama.StreamAsync(userMessage, ct))
                 yield return chunk;
         }
     }
@@ -149,6 +151,8 @@ Otherwise respond normally.
     {
         tool = "";
         args = "";
+        if (text == null)
+            return false;
 
         try
         {
@@ -170,7 +174,7 @@ Otherwise respond normally.
             return false;
         }
     }
-
+    
     private string BuildClarificationQuestion(IEnumerable<string> missing)
     {
         return "I need additional information before proceeding: "
@@ -208,7 +212,7 @@ Fix this:
 {current}
 """;
 
-            current = CleanJson(await _ollama.GenerateAsync(fixPrompt));
+            current = CleanJson(await ollama.GenerateAsync(fixPrompt));
         }
 
         return null;

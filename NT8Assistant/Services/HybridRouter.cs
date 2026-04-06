@@ -29,8 +29,8 @@ public class HybridRouter : IAgent
         {
             "dispense",
             "aspirate",
-            "move",
-            "plate",
+            "simulate",
+            "station",
             "column"
         };
 
