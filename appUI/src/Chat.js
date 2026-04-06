@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import "./Chat.css";
 
+const VALIDATION_URL = "http://localhost:5000/chat/resolve";
+const STREAM_URL = "http://localhost:5000/chat/stream";
+
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -33,7 +37,7 @@ function Chat() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/chat/stream?message=${encodeURIComponent(userInput)}`
+        `${STREAM_URL}?message=${encodeURIComponent(userInput)}`
       );
 
       const reader = response.body.getReader();
@@ -71,19 +75,34 @@ function Chat() {
       // After streaming finished → detect tool JSON
       try {
         const parsed = JSON.parse(fullResponse);
+        console.log("Parsed response:", parsed);
 
-        if (parsed?.success === true && parsed?.data) {
-          setMessages(prev => {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
+        setMessages(prev => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
+
+          // ✅ Tool success
+          if (parsed?.success === true && parsed?.data) {
+            updated[lastIndex] = {
               role: "assistant",
               type: "tool",
               content: parsed.data
             };
-            return updated;
-          });
-        }
-      } catch {
+          }
+
+          // ✅ Missing required fields
+          else if (parsed?.success === false && parsed?.missingFields) {
+            updated[lastIndex] = {
+              role: "assistant",
+              type: "validation",
+              content: parsed.missingFields
+            };
+          }
+
+          return updated;
+        });
+
+      } catch (err) {
         // Not JSON → keep chat message
       }
 
@@ -101,6 +120,7 @@ function Chat() {
   };
 
   const renderMessage = (msg) => {
+    console.log("Rendering message:", msg);
     switch (msg.type) {
       case "thinking":
         return (
@@ -122,12 +142,98 @@ function Chat() {
           </div>
         );
 
+      case "validation":
+        return (
+          <ValidationForm
+            fields={msg.content.missingFields}
+            originalInput={msg.content.originalUserInput}
+          />
+        );
+
       case "error":
         return <div className="error">{msg.content}</div>;
 
       default:
         return <ReactMarkdown>{msg.content}</ReactMarkdown>;
     }
+  };
+
+  const ValidationForm = ({ fields, originalInput }) => {
+    const [formData, setFormData] = useState({});
+
+    const handleChange = (field, value) => {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    };
+
+    const handleSubmit = async () => {
+      const payload = {
+        originalInput,
+        ...formData
+      };
+
+      // Remove validation message
+      setMessages(prev => prev.slice(0, -1));
+
+      // Add thinking bubble
+      setMessages(prev => [
+        ...prev,
+        { role: "assistant", type: "thinking", content: "" }
+      ]);
+
+      try {
+        const response = await fetch(VALIDATION_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            type: "tool",
+            content: result.data
+          };
+          return updated;
+        });
+
+      } catch {
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            role: "assistant",
+            type: "error",
+            content: "⚠️ Failed to resolve missing fields."
+          };
+          return updated;
+        });
+      }
+    };
+
+    return (
+      <div className="validation-card">
+        <div className="validation-title">
+          Missing Required Fields
+        </div>
+
+        {fields.map((field, i) => (
+          <div key={i} className="form-group">
+            <label>{field}</label>
+            <input
+              type="text"
+              onChange={e => handleChange(field, e.target.value)}
+            />
+          </div>
+        ))}
+
+        <button onClick={handleSubmit}>Submit</button>
+      </div>
+    );
   };
 
   return (

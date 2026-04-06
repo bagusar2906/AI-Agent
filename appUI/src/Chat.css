@@ -129,7 +129,39 @@ button {
   animation: bounce 1.4s infinite;
 }
 
+.validation {
+  background: #332600;
+  border: 1px solid #ffb84d;
+  color: #ffcc80;
+  padding: 10px;
+  border-radius: 8px;
+}
 
+.validation-card {
+  background: #2a1f00;
+  border: 1px solid #ffb84d;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.validation-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  color: #ffcc80;
+}
+
+.form-group {
+  margin-bottom: 8px;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 5px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #1e1e1e;
+  color: white;
+}
 
 .typing span:nth-child(2) {
   animation-delay: 0.2s;
