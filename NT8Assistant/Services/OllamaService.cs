@@ -33,8 +33,7 @@ public class OllamaService
         string prompt,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var http = new HttpClient();
-
+       
         var requestBody = new
         {
             model = _model,
@@ -42,8 +41,8 @@ public class OllamaService
             stream = true
         };
 
-        var response = await http.PostAsJsonAsync(
-            "http://localhost:11434/api/generate",
+        var response = await _http.PostAsJsonAsync(
+            "/api/generate",
             requestBody,
             ct);
 
