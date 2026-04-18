@@ -13,7 +13,10 @@ public class OllamaService
         _http = http;
         var baseUrl = config["Ollama:BaseUrl"];
         _model = config["Ollama:Model"];
-        _http.BaseAddress = new Uri(baseUrl!);
+        _http.BaseAddress = new Uri(baseUrl);
+        if (config.GetValue<bool>("Ollama:UseBasicAuth"))
+            _http.DefaultRequestHeaders.Add("Authorization", "Bearer " + config["Ollama:ApiKey"]);
+
     }
 
     public async Task<string?> GenerateAsync(string userPrompt)
