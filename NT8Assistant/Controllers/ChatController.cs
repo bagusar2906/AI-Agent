@@ -41,6 +41,44 @@ public class ChatController(IAgent agent, ChatService chatService, ILogger<ChatC
 
             await Response.WriteAsync("data: [DONE]\n\n");
 
-        await chatService.SaveMessageAsync(sessionId, "user", userMessage);
+     //   await chatService.SaveMessageAsync(sessionId, "user", userMessage);
+    }
+    
+    [HttpPost("suggest")]
+    public async Task<IActionResult> Suggest([FromBody] ChatRequest request)
+    {
+        var input = request.Messages.Last().Content;
+        
+        var suggestion = agent.GenerateSuggestion(input);
+
+        string result;
+        // fallback to AI if no rule match
+        if (string.IsNullOrEmpty(suggestion))
+        {
+            
+            result = "";
+
+            await foreach (var chunk in agent.RunAsync($@"
+You are an autocomplete engine.
+Continue the text only.
+
+Input:
+{input}
+"))
+            {
+                result += chunk;
+
+                if (result.Length > 80) break; // ⚡ limit for speed
+            }
+            
+            
+        }
+        else
+        {
+          result = suggestion;
+        }
+
+        return Ok(new { suggestion = result });
+       
     }
 }

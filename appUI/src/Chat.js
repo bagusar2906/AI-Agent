@@ -1,241 +1,215 @@
-import React, { useState, useRef, useEffect } from "react";
-import ReactMarkdown from "react-markdown";
-import "./Chat.css";
+import React, { useState, useEffect, useRef } from "react";
+import Editor, { useMonaco } from "@monaco-editor/react";
 
-const VALIDATION_URL = "http://localhost:5000/chat/resolve";
-const STREAM_URL = "http://localhost:5000/chat/stream";
-
+const STREAM_URL = "http://localhost:5000/chat/completions"; // streaming
+const SUGGEST_URL = "http://localhost:5000/chat/suggest";     // context-aware
 
 function Chat() {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [darkMode, setDarkMode] = useState(true);
-  const chatEndRef = useRef(null);
+  const [debugSuggestion, setDebugSuggestion] = useState("");
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const monaco = useMonaco();
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
+  // 🔥 refs for streaming
+  const suggestionRef = useRef("");
+  const streamingRef = useRef(false);
+  const abortRef = useRef(null);
+  const lastInputRef = useRef("");
+  const editorRef = useRef(null);
+  const debounceRef = useRef(null);
 
-    const userInput = input;
+  // =========================================================
+  // 🔹 STREAMING (Ollama / SSE)
+  // =========================================================
+  const startStreaming = async (text) => {
+    if (!editorRef.current) return;
 
-    // Add user message
-    setMessages(prev => [
-      ...prev,
-      { role: "user", type: "chat", content: userInput }
-    ]);
+    // prevent duplicate streams
+    if (streamingRef.current) return;
 
-    setInput("");
+    // cancel previous
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
 
-    // Add thinking bubble
-    setMessages(prev => [
-      ...prev,
-      { role: "assistant", type: "thinking", content: "" }
-    ]);
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    suggestionRef.current = "";
+    streamingRef.current = true;
 
     try {
-      const response = await fetch(
-        `${STREAM_URL}?message=${encodeURIComponent(userInput)}`
-      );
+      const res = await fetch(STREAM_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: text }]
+        }),
+        signal: controller.signal
+      });
 
-      const reader = response.body.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
 
-      let fullResponse = "";
+      let fullText = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const decodedChunk = decoder.decode(value);
-        fullResponse += decodedChunk;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
 
-        setMessages(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-          const last = updated[lastIndex];
+        for (let line of lines) {
+          if (!line.startsWith("data: ")) continue;
 
-          // If the last message is the initial "thinking" bubble, replace it on first chunk
-          if (!last || last.type === "thinking") {
-            updated[lastIndex] = {
-              role: "assistant",
-              type: "chat",
-              content: decodedChunk
-            };
-          } else {
-            updated[lastIndex].content += decodedChunk;
+          const data = line.replace("data: ", "").trim();
+
+          if (data === "[DONE]") {
+            streamingRef.current = false;
+            return;
           }
 
-          return updated;
-        });
+          fullText += data;
+
+          // 🔥 trim already typed part
+          let suggestion = fullText;
+          if (fullText.startsWith(text)) {
+            suggestion = fullText.slice(text.length);
+          }
+
+          suggestionRef.current = suggestion;
+          setDebugSuggestion(suggestion);
+
+          // limit length
+          if (suggestion.length > 100) {
+            streamingRef.current = false;
+            return;
+          }
+
+          // refresh Monaco
+          setTimeout(() => {
+            editorRef.current?.trigger(
+              "keyboard",
+              "editor.action.inlineSuggest.trigger",
+              {}
+            );
+          }, 0);
+        }
       }
-
-      // After streaming finished → detect tool JSON
-      try {
-        const parsed = JSON.parse(fullResponse);
-        console.log("Parsed response:", parsed);
-
-        setMessages(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-
-          // ✅ Tool success
-          if (parsed?.success === true && parsed?.data) {
-            updated[lastIndex] = {
-              role: "assistant",
-              type: "tool",
-              content: parsed.data
-            };
-          }
-
-          // ✅ Missing required fields
-          else if (parsed?.success === false && parsed?.missingFields) {
-            updated[lastIndex] = {
-              role: "assistant",
-              type: "validation",
-              content: parsed.missingFields
-            };
-          }
-
-          return updated;
-        });
-
-      } catch (err) {
-        // Not JSON → keep chat message
-      }
-
     } catch (err) {
-      setMessages(prev => {
-        const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "assistant",
-          type: "error",
-          content: "⚠️ Failed to connect to server."
-        };
-        return updated;
+      if (err.name !== "AbortError") console.error(err);
+      streamingRef.current = false;
+    }
+  };
+
+  // =========================================================
+  // 🔹 FAST CONTEXT-AWARE SUGGESTION
+  // =========================================================
+  const fetchContextSuggestion = async (text) => {
+    try {
+      const res = await fetch(SUGGEST_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: text }]
+        })
       });
-    }
-  };
 
-  const renderMessage = (msg) => {
-    console.log("Rendering message:", msg);
-    switch (msg.type) {
-      case "thinking":
-        return (
-          <div className="thinking">
-            Thinking
-            <span className="dot">.</span>
-            <span className="dot">.</span>
-            <span className="dot">.</span>
-          </div>
+      const data = await res.json();
+
+      if (data.suggestion) {
+        suggestionRef.current = data.suggestion;
+        setDebugSuggestion(data.suggestion);
+
+        editorRef.current?.trigger(
+          "keyboard",
+          "editor.action.inlineSuggest.trigger",
+          {}
         );
 
-      case "tool":
-        return (
-          <div className="tool-card">
-            {/* <div className="tool-title">Tool Result</div> */}
-            <pre>
-              <code>{JSON.stringify(msg.content, null, 2)}</code>
-            </pre>
-          </div>
-        );
-
-      case "validation":
-        return (
-          <ValidationForm
-            fields={msg.content.missingFields}
-            originalInput={msg.content.originalUserInput}
-          />
-        );
-
-      case "error":
-        return <div className="error">{msg.content}</div>;
-
-      default:
-        return <ReactMarkdown>{msg.content}</ReactMarkdown>;
-    }
-  };
-
-  const ValidationForm = ({ fields, originalInput }) => {
-    const [formData, setFormData] = useState({});
-
-    const handleChange = (field, value) => {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    };
-
-    const handleSubmit = async () => {
-      const payload = {
-        originalInput,
-        ...formData
-      };
-
-      // Remove validation message
-      setMessages(prev => prev.slice(0, -1));
-
-      // Add thinking bubble
-      setMessages(prev => [
-        ...prev,
-        { role: "assistant", type: "thinking", content: "" }
-      ]);
-
-      try {
-        const response = await fetch(VALIDATION_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        const result = await response.json();
-
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            type: "tool",
-            content: result.data
-          };
-          return updated;
-        });
-
-      } catch {
-        setMessages(prev => {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            type: "error",
-            content: "⚠️ Failed to resolve missing fields."
-          };
-          return updated;
-        });
+        return true;
       }
-    };
+    } catch (err) {
+      console.error(err);
+    }
 
-    return (
-      <div className="validation-card">
-        <div className="validation-title">
-          Missing Required Fields
-        </div>
-
-        {fields.map((field, i) => (
-          <div key={i} className="form-group">
-            <label>{field}</label>
-            <input
-              type="text"
-              onChange={e => handleChange(field, e.target.value)}
-            />
-          </div>
-        ))}
-
-        <button onClick={handleSubmit}>Submit</button>
-      </div>
-    );
+    return false;
   };
 
+  // =========================================================
+  // 🔹 MONACO PROVIDER
+  // =========================================================
+  useEffect(() => {
+    if (!monaco) return;
+
+    const provider = monaco.languages.registerInlineCompletionsProvider(
+      "javascript",
+      {
+        provideInlineCompletions: async (model, position) => {
+          const text = model.getValueInRange({
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: position.lineNumber,
+            endColumn: position.column
+          });
+
+          if (text.length < 2) return { items: [] };
+
+          // debounce trigger
+          if (debounceRef.current) {
+            clearTimeout(debounceRef.current);
+          }
+
+          debounceRef.current = setTimeout(async () => {
+            if (text !== lastInputRef.current) {
+              lastInputRef.current = text;
+
+              // 🔥 try fast context suggestion first
+              const hasContext = await fetchContextSuggestion(text);
+
+              // fallback to streaming
+              if (!hasContext) {
+                startStreaming(text);
+              }
+            }
+          }, 250);
+
+          const suggestion = suggestionRef.current;
+
+          return {
+            items: suggestion
+              ? [
+                  {
+                    insertText: suggestion,
+                    range: {
+                      startLineNumber: position.lineNumber,
+                      startColumn: position.column,
+                      endLineNumber: position.lineNumber,
+                      endColumn: position.column
+                    }
+                  }
+                ]
+              : []
+          };
+        },
+
+        freeInlineCompletions: () => {},
+        disposeInlineCompletions: () => {}
+      }
+    );
+
+    return () => provider.dispose();
+  }, [monaco]);
+
+  // =========================================================
+  // 🔹 UI
+  // =========================================================
   return (
     <div className={darkMode ? "app dark" : "app light"}>
       <div className="header">
@@ -245,23 +219,53 @@ function Chat() {
         </button>
       </div>
 
-      <div className="chat">
-        {messages.map((msg, i) => (
-          <div key={i} className={`message ${msg.role}`}>
-            {renderMessage(msg)}
-          </div>
-        ))}
-        <div ref={chatEndRef} />
+      {/* Monaco Editor */}
+      <div style={{ height: "200px", border: "1px solid #444" }}>
+        <Editor
+          height="100%"
+          defaultLanguage="javascript"
+          value={input}
+          onMount={(editor) => {
+            editorRef.current = editor;
+          }}
+          onChange={(value) => {
+            const newValue = value || "";
+            setInput(newValue);
+
+            // cancel streaming
+            if (abortRef.current) {
+              abortRef.current.abort();
+            }
+
+            suggestionRef.current = "";
+            streamingRef.current = false;
+          }}
+          theme={darkMode ? "vs-dark" : "light"}
+          options={{
+            minimap: { enabled: false },
+            fontSize: 14,
+            inlineSuggest: { enabled: true },
+            quickSuggestions: false,
+            suggestOnTriggerCharacters: false,
+            wordBasedSuggestions: false
+          }}
+        />
       </div>
 
-      <div className="inputArea">
-        <input
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Ask something..."
-          onKeyDown={e => e.key === "Enter" && sendMessage()}
-        />
-        <button onClick={sendMessage}>Send</button>
+      {/* Debug suggestion */}
+      <div style={{ marginTop: 10, color: "#888" }}>
+        Suggestion: {debugSuggestion}
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <button
+          onClick={() => {
+            console.log("Send:", input);
+            setInput("");
+          }}
+        >
+          Send
+        </button>
       </div>
     </div>
   );

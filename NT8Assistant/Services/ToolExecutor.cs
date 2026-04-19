@@ -9,6 +9,8 @@ public interface IAgent
     IAsyncEnumerable<string> RunAsync(
         string userMessage,
         CancellationToken ct = default);
+
+    string? GenerateSuggestion(string input);
 }
 public class ToolExecutor(OllamaService ollama, ToolRegistry registry) : IAgent
 {
@@ -143,6 +145,11 @@ Otherwise respond normally.
             await foreach (var chunk in ollama.StreamAsync(userMessage, ct))
                 yield return chunk;
         }
+    }
+
+    public string? GenerateSuggestion(string input)
+    {
+        throw new NotImplementedException();
     }
 
     private bool TryParseToolCall(string? text,

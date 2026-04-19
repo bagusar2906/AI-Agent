@@ -11,4 +11,9 @@ public class ChatAssistant(OllamaService ollama) : IAgent
         await foreach (var chunk in ollama.StreamAsync(userMessage, ct))
             yield return chunk;
     }
+
+    public string? GenerateSuggestion(string input)
+    {
+        throw new NotImplementedException();
+    }
 }

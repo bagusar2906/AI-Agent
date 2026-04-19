@@ -19,7 +19,11 @@ builder.Host.UseSerilog();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddHttpClient<OllamaService>();
+builder.Services.AddHttpClient<OllamaService>()
+    .ConfigureHttpClient(c =>
+    {
+        c.Timeout = Timeout.InfiniteTimeSpan;
+    });
 
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<RagService>();
